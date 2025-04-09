@@ -1,25 +1,84 @@
 const std = @import("std");
 const rl = @import("raylib");
 const math = std.math;
+const utils = @import("utils.zig");
 
 pub const Cell = @This();
 
+rand: *const std.Random,
 x: f32,
 y: f32,
 radius: f32,
 color: *const rl.Color,
+move_speed: f32 = -1.0,
 
-pub fn Init(x: f32, y: f32, radius: f32, color: *const rl.Color) @This() {
+// 基因属性
+move_normal_speed: f32 = -1.0,
+move_acceleration: f32 = -1.0,
+move_max_speed: f32 = -1.0,
+
+pub fn Init(x: f32, y: f32, radius: f32, color: *const rl.Color, rand: *const std.Random) @This() {
     return @This(){
         .x = x,
         .y = y,
         .radius = radius,
         .color = color,
+        .move_speed = 15.9,
+        .rand = rand,
     };
 }
 
 pub fn IsInside(self: *const @This(), x: f32, y: f32) bool {
     return self.radius >= math.pow(f32, (self.x - x) * (self.x - x) + (self.y - y) * (self.y - y), 0.5);
+}
+
+fn MoveDistance(self: *@This()) f32 {
+    const times = rl.getFrameTime();
+
+    const normal_speed = utils.FetchPlusValue(self.move_normal_speed);
+    const acceleration = utils.FetchPlusValue(self.move_acceleration);
+    const max_speed = utils.FetchPlusValue(self.move_max_speed);
+
+    var distance: f32 = 0.0;
+    if (self.move_speed < 0.0) {
+        self.move_speed = normal_speed + acceleration * times;
+        distance = normal_speed * times + acceleration * times * times;
+    } else {
+        self.move_speed = self.move_speed + acceleration * times;
+        distance = self.move_speed * times + acceleration * times * times;
+    }
+
+    if (self.move_max_speed > 0.0 and self.move_speed > max_speed) {
+        self.move_speed = self.move_max_speed;
+    }
+
+    return distance;
+}
+
+fn MoveToPoint(self: *@This(), x: f32, y: f32) void {
+    const distance = self.MoveDistance();
+
+    const vector_distance = math.pow(f32, (x - self.x) * (x - self.x) + (y - self.y) * (y - self.y), 0.5);
+
+    self.x = self.x + distance * (x - self.x) * vector_distance;
+    self.y = self.y + distance * (y - self.y) * vector_distance;
+}
+
+/// 朝下为零度，逆时针旋转为角度增加方向
+fn MoveByAngle(self: *@This(), degree: f32) void {
+    const distance = self.MoveDistance();
+    const radius: f32 = math.rad_per_deg * degree;
+
+    self.x = self.x + distance * math.sin(radius);
+    self.y = self.y + distance * math.cos(radius);
+}
+
+fn Move(self: *@This()) void {
+    self.MoveByAngle(@floatFromInt(self.rand.intRangeAtMost(u32, 0, 360)));
+}
+
+pub fn DoAction(self: *@This()) void {
+    self.Move();
 }
 
 const SegmentAngle: f32 = 15.0;
